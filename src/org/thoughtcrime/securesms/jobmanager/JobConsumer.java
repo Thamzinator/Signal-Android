@@ -16,9 +16,12 @@
  */
 package org.thoughtcrime.securesms.jobmanager;
 
+import android.support.annotation.NonNull;
 import android.util.Log;
 
 import org.thoughtcrime.securesms.jobmanager.persistence.PersistentStorage;
+
+import java.io.IOException;
 
 class JobConsumer extends Thread {
 
@@ -47,6 +50,15 @@ class JobConsumer extends Thread {
 
       if (result == JobResult.DEFERRED) {
         jobQueue.push(job);
+
+        if (job.isPersistent()) {
+          try {
+            persistentStorage.update(job);
+          } catch (IOException e) {
+            Log.w(TAG, "Failed to update job on persistent storage. Canceling it.", e);
+            job.onCanceled();
+          }
+        }
       } else {
         if (result == JobResult.FAILURE) {
           job.onCanceled();
@@ -59,21 +71,18 @@ class JobConsumer extends Thread {
         if (job.getWakeLock() != null && job.getWakeLockTimeout() == 0) {
           job.getWakeLock().release();
         }
-      }
 
-      if (job.getGroupId() != null) {
-        jobQueue.setGroupIdAvailable(job.getGroupId());
+        if (job.getGroupId() != null) {
+          jobQueue.setGroupIdAvailable(job.getGroupId());
+        }
       }
     }
   }
 
   private JobResult runJob(Job job) {
-    int retryCount   = job.getRetryCount();
-    int runIteration = job.getRunIteration();
-
-    for (;runIteration<retryCount;runIteration++) {
+    while (canRetry(job)) {
       try {
-        job.onRun();
+        job.run();
         return JobResult.SUCCESS;
       } catch (Exception exception) {
         Log.w(TAG, exception);
@@ -81,14 +90,23 @@ class JobConsumer extends Thread {
           throw (RuntimeException)exception;
         } else if (!job.onShouldRetry(exception)) {
           return JobResult.FAILURE;
-        } else if (!job.isRequirementsMet()) {
-          job.setRunIteration(runIteration+1);
+        }
+
+        job.onRetry();
+        if (!job.isRequirementsMet()) {
           return JobResult.DEFERRED;
         }
       }
     }
 
     return JobResult.FAILURE;
+  }
+
+  private boolean canRetry(@NonNull Job job) {
+    if (job.getRetryCount() > 0) {
+      return job.getRunIteration() < job.getRetryCount();
+    }
+    return job.getStartTime() == 0 || System.currentTimeMillis() < job.getStartTime() + job.getRetryDuration();
   }
 
 }

@@ -38,6 +38,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 public abstract class PushSendJob extends SendJob {
 
@@ -53,7 +54,7 @@ public abstract class PushSendJob extends SendJob {
     builder.withGroupId(destination.serialize());
     builder.withRequirement(new MasterSecretRequirement(context));
     builder.withRequirement(new NetworkRequirement(context));
-    builder.withRetryCount(5);
+    builder.withRetryDuration(context, TimeUnit.DAYS.toMillis(1));
 
     return builder.create();
   }

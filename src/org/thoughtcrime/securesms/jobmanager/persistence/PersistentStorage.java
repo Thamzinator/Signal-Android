@@ -21,6 +21,7 @@ import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
+import android.support.annotation.NonNull;
 import android.util.Log;
 
 import org.thoughtcrime.securesms.jobmanager.EncryptionKeys;
@@ -59,12 +60,26 @@ public class PersistentStorage {
   }
 
   public void store(Job job) throws IOException {
-    ContentValues contentValues = new ContentValues();
-    contentValues.put(ITEM, jobSerializer.serialize(job));
-    contentValues.put(ENCRYPTED, job.getEncryptionKeys() != null);
+    ContentValues contentValues = toContentValues(job);
 
     long id = databaseHelper.getWritableDatabase().insert(TABLE_NAME, null, contentValues);
     job.setPersistentId(id);
+  }
+
+  public void update(Job job) throws IOException {
+    ContentValues contentValues = toContentValues(job);
+    int count = databaseHelper.getWritableDatabase().update(TABLE_NAME, contentValues, ID + " = ?", new String[]{ String.valueOf(job.getPersistentId()) });
+
+    if (count == 0) {
+      throw new IOException("Failed to update job.");
+    }
+  }
+
+  private ContentValues toContentValues(Job job) throws IOException {
+    ContentValues contentValues = new ContentValues();
+    contentValues.put(ITEM, jobSerializer.serialize(job));
+    contentValues.put(ENCRYPTED, job.getEncryptionKeys() != null);
+    return contentValues;
   }
 
   public List<Job> getAllUnencrypted() {

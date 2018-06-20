@@ -16,6 +16,9 @@
  */
 package org.thoughtcrime.securesms.jobmanager;
 
+import android.content.Context;
+
+import org.thoughtcrime.securesms.jobmanager.requirements.BackoffRequirement;
 import org.thoughtcrime.securesms.jobmanager.requirements.Requirement;
 
 import java.io.Serializable;
@@ -33,6 +36,7 @@ public class JobParameters implements Serializable {
   private final List<Requirement> requirements;
   private final boolean           isPersistent;
   private final int               retryCount;
+  private final long              retryDuration;
   private final String            groupId;
   private final boolean           wakeLock;
   private final long              wakeLockTimeout;
@@ -40,7 +44,7 @@ public class JobParameters implements Serializable {
   private JobParameters(List<Requirement> requirements,
                        boolean isPersistent, String groupId,
                        EncryptionKeys encryptionKeys,
-                       int retryCount, boolean wakeLock,
+                       int retryCount, long retryDuration, boolean wakeLock,
                        long wakeLockTimeout)
   {
     this.requirements    = requirements;
@@ -48,6 +52,7 @@ public class JobParameters implements Serializable {
     this.groupId         = groupId;
     this.encryptionKeys  = encryptionKeys;
     this.retryCount      = retryCount;
+    this.retryDuration   = retryDuration;
     this.wakeLock        = wakeLock;
     this.wakeLockTimeout = wakeLockTimeout;
   }
@@ -70,6 +75,10 @@ public class JobParameters implements Serializable {
 
   public int getRetryCount() {
     return retryCount;
+  }
+
+  public long getRetryDuration() {
+    return retryDuration;
   }
 
   /**
@@ -96,6 +105,7 @@ public class JobParameters implements Serializable {
     private boolean           isPersistent    = false;
     private EncryptionKeys    encryptionKeys  = null;
     private int               retryCount      = 100;
+    private long              retryDuration   = 0;
     private String            groupId         = null;
     private boolean           wakeLock        = false;
     private long              wakeLockTimeout = 0;
@@ -139,7 +149,15 @@ public class JobParameters implements Serializable {
      * @return the builder.
      */
     public Builder withRetryCount(int retryCount) {
-      this.retryCount = retryCount;
+      this.retryCount    = retryCount;
+      this.retryDuration = 0;
+      return this;
+    }
+
+    public Builder withRetryDuration(Context context, long duration) {
+      this.retryDuration = duration;
+      this.retryCount    = 0;
+      this.requirements.add(new BackoffRequirement(context));
       return this;
     }
 
@@ -184,7 +202,7 @@ public class JobParameters implements Serializable {
      * @return the JobParameters instance that describes a Job.
      */
     public JobParameters create() {
-      return new JobParameters(requirements, isPersistent, groupId, encryptionKeys, retryCount, wakeLock, wakeLockTimeout);
+      return new JobParameters(requirements, isPersistent, groupId, encryptionKeys, retryCount, retryDuration, wakeLock, wakeLockTimeout);
     }
   }
 }
